@@ -1,0 +1,129 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  this is a banking application built using AWS Lambda function, API Gateway and S3 bucket
+
+
+Resources:
+  
+  BankingSystemS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:      
+      BucketName: surya-banking-s3-bucket
+      
+
+  
+  # https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html
+  IAMrole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:         
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      
+      Description: This is the IAMrole for lambda function
+
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      RoleName: Allow-S3-Role
+
+  LambdaFunction:
+    DependsOn: 
+      - IAMrole
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures: 
+        - x86_64 
+      Code: 
+        ZipFile: | 
+          import json 
+          import boto3
+
+          client = boto3.client("s3")
+
+          def lambda_handler(event, context):
+              response = client.get_object( 
+                  Bucket="surya-banking-s3-bucket",
+                  Key="sample.json"
+                  )
+          #convert from streaming data to byte
+              data_byte = response['Body'].read() 
+          # convert from bytes to strings
+              data_string = data_byte.decode("UTF-8")
+          # convert from json string to dictionary 
+              data_dict = json.loads(data_string)
+              return {
+                  'statusCode': 200,
+          # 'body': data_dict
+                  'body': json.dumps(data_dict),
+                  'headers': {'Content-Type': 'application/json'},
+              }
+      Description: This is the Lambada funtion
+      Handler: index.lambda_handler
+      Role: !GetAtt IAMrole.Arn
+      Runtime: python3.12
+      Timeout: 30
+
+  bankingRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:     
+      Name: Banking System API
+
+  bankingStatusResource:
+    Type: 'AWS::ApiGateway::Resource'
+    DependsOn: 
+      - bankingRestApi
+    Properties:
+      RestApiId: !Ref bankingRestApi
+      ParentId: !GetAtt bankingRestApi.RootResourceId
+      PathPart: bankingStatusResource
+
+  getBankingStatusMethod:
+    Type: 'AWS::ApiGateway::Method'
+    DependsOn:
+      - bankingStatusResource
+    Properties:
+      RestApiId: !Ref bankingRestApi
+      ResourceId: !GetAtt bankingRestApi.RootResourceId
+      HttpMethod: GET
+      MethodResponses:
+        - StatusCode: '200'
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationResponses:
+            - StatusCode: '200'
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt LambdaFunction.Arn
+
+  bankingAPIDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: 
+      - getBankingStatusMethod
+    Properties:
+      RestApiId: !Ref bankingRestApi
+      Description: Banking system API deployment 
+      StageName: Dev
+  
+  lambdaFunctionInvokePermisson:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: 'apigateway.amazonaws.com'
+      SourceAccount: "107520159244"
+          
+      
+
+
+
+
