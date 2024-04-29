@@ -1,4 +1,4 @@
-﻿# AWS-Serverless-CloudFormation-Project
+﻿# AWS-Serverless-RestAPI-Architecture-Project Using CloudFormation
 This is a CloudFormation template that sets up the infrastructure for a banking application, allowing users to query banking status via API Gateway Service, which triggers the Lambda function Service to fetch data from an S3 bucket Service and return it as a response.
 
 # Architecture:
